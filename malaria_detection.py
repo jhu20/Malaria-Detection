@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Malaria_Detection.ipynb
-"""
-
 # Commented out IPython magic to ensure Python compatibility.
 # %tensorflow_version 2.x
 !pip install -q kaggle
