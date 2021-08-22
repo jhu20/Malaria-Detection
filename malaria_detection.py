@@ -39,17 +39,6 @@ from keras.applications.vgg19 import VGG19
 from keras.applications.densenet import DenseNet121
 !pip install kaggle
 
-from google.colab import files
-files.upload()
-!ls -lha kaggle.json
-
-!mkdir -p ~/.kaggle
-!cp kaggle.json ~/.kaggle/
-
-!chmod 600 ~/.kaggle/kaggle.json
-
-!kaggle datasets download -d iarunava/cell-images-for-detecting-malaria
-
 !cd /content/
 !unzip cell-images-for-detecting-malaria.zip
 
