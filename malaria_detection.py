@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-# Commented out IPython magic to ensure Python compatibility.
-# %tensorflow_version 2.x
+%tensorflow_version 2.x
 !pip install -q kaggle
 from urllib.request import urlretrieve
 from pathlib import Path
@@ -13,7 +11,7 @@ import seaborn as sns
 import os
 import random
 from sklearn.model_selection import train_test_split
-
+import cv2
 
 
 import numpy as np
@@ -23,74 +21,74 @@ import PIL.Image
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-
-
 from tensorflow import keras
 from tensorflow.keras import layers
 from keras.models import Sequential
 from keras.layers import Activation, MaxPooling2D, Dropout, Flatten, Reshape, Dense, Conv2D, GlobalAveragePooling2D, BatchNormalization
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.regularizers import l2
+from keras.preprocessing import image
+from keras.preprocessing.image import load_img
+from keras.preprocessing.image import img_to_array
+from keras.models import load_model
 from keras.wrappers.scikit_learn import KerasClassifier
 import keras.optimizers as optimizers
 from keras.callbacks import ModelCheckpoint
 
-from keras.applications.vgg16 import VGG16
-from keras.applications.vgg19 import VGG19
-from keras.applications.densenet import DenseNet121
-!pip install kaggle
+from google.colab import files
+files.upload()
+!mkdir -p ~/.kaggle
+!cp kaggle.json ~/.kaggle/
+!ls ~/.kaggle
+!chmod 600 /root/.kaggle/kaggle.json
+!kaggle datasets download -d iarunava/cell-images-for-detecting-malaria
 
 !cd /content/
 !unzip cell-images-for-detecting-malaria.zip
 
-imageDataGenerator = tf.keras.utils.image_dataset_from_directory
-batch_size = 32
-img_height = 180
-img_width = 180
+parasitized_data = os.listdir('../content/cell_images/cell_images/Parasitized')
+print(parasitized_data[:10]) 
 
-train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-  "/content/cell_images", 
-  validation_split=0.2,
-  subset="training",
-  seed=123,
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
-train_ds=train_ds.shuffle(300)
+uninfected_data = os.listdir('../content/cell_images/cell_images/Uninfected')
 
-val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-  "/content/cell_images",
-  validation_split=0.2,
-  subset="validation",
-  seed=123,
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
-val_ds=val_ds.shuffle(300)
+print('\n')
+print(uninfected_data[:10])
 
-model = Sequential([
-  layers.experimental.preprocessing.Rescaling(1./255, input_shape=(img_height, img_width, 3)),
-  layers.Conv2D(32,(5, 5), padding='same', activation='relu'),
-  layers.Conv2D(32,(5, 5), padding = 'same', activation ='relu'),
-  layers.MaxPool2D(),
-  layers.Dropout(0.25),
+train_generator=ImageDataGenerator(rescale=1/255.0)
+test_generator=ImageDataGenerator(rescale=1/255.0, validation_split=0.2)
+datagen = ImageDataGenerator(rescale=1/255.0, validation_split=0.2)
 
-  layers.Conv2D(64, 3, padding='same', activation='relu'),
-  layers.MaxPool2D(),
-  layers.Conv2D(64, 3, padding='same', activation='relu'),
-  layers.MaxPool2D(),
-  layers.Dropout(0.25),
+train_data=datagen.flow_from_directory(directory='/content/cell_images/cell_images', target_size=(180, 180), class_mode='binary', color_mode='rgb', batch_size=32,shuffle=True, subset='training')
 
-  layers.Flatten(),
-  layers.Dense(256, activation='softmax'),
-  layers.Dropout(0.5),
-  layers.Dense(10),
-])
+test_data=datagen.flow_from_directory(directory='/content/cell_images/cell_images', target_size=(180, 180), class_mode='binary', color_mode='rgb', batch_size=32,shuffle=True, subset='validation')
 
-opt = keras.optimizers.SGD(learning_rate=0.01, decay=1e-6)
+model = Sequential()
 
-    # train the model using SDG(Stochastic Gradient Descent)
-model.compile(loss='categorical_crossentropy',optimizer=opt, metrics=[tf.keras.metrics.AUC()])
+#adding convolutional layers
+model.add(Conv2D(filters=32, kernel_size=(3,3),input_shape=(180,180,3),activation='relu',padding="same"))
+model.add(MaxPooling2D(pool_size=(2,2),strides=2))
+model.add(Conv2D(filters=64, kernel_size=(3,3),input_shape=(180,180,3),activation='relu',padding="same"))
+model.add(MaxPooling2D(pool_size=(2,2),strides=2))
+model.add(Conv2D(filters=128, kernel_size=(3,3),input_shape=(180,180,3),activation='relu',padding="same"))
+model.add(MaxPooling2D(pool_size=(2,2),strides=2))
+model.add(Conv2D(filters=256, kernel_size=(3,3),input_shape=(180,180,3),activation='relu',padding="same"))
+model.add(MaxPooling2D(pool_size=(2,2),strides=2))
 
-model.compile(optimizer='adam',loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),metrics=['accuracy'])
+# flattening image
+model.add(Flatten())
+
+# adding dense layers
+model.add(Dense(128,activation='relu'))
+# adding dropout to minimize overfitting issue
+model.add(Dropout(0.2))
+model.add(Dense(50,activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1,activation='sigmoid'))
+
+#compiling the model
+model.compile(loss='binary_crossentropy',optimizer='adam' ,metrics=["accuracy"])
+
+#summary of the model
 model.summary()
 
-epochs=1
-history = model.fit(train_ds,validation_data=val_ds, epochs=epochs, verbose=2)
+history = model.fit_generator(generator = train_data,steps_per_epoch = len(train_data),epochs =10, validation_data = test_data, validation_steps=len(test_data))
